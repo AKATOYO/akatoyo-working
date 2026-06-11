@@ -1,0 +1,41 @@
+¡Casi! El código de tu aplicación ya está funcionando correctamente en tu 
+computadora local, pero antes de subirlo a GitHub y desplegarlo , hay una 
+lista de verificación crítica que debes revisar. Si te saltas esto, la 
+aplicación se caerá en internet.
+
+Aquí tienes los pasos exactos que debes seguir:
+
+1. Pruebe la versión de producción local (¡MUY IMPORTANTE!)
+El servidor de desarrollo ( ) es muy tolerante a los errores, pero la 
+versión que se sube a internet es de producción. 
+ Para simularlo ==>>> npm run dev
+
+2. ==>>> npm run build (EJECUTE)
+Si hay errores de TypeScript o de sintaxis, la terminal te lo dirá 
+aquí y la construcción fallará. Si falla, debes arreglar los errores 
+antes de subirlo. *Nota: Es normal queNota: Es normal que salgan 
+advertencias (warnings), pero los errores en rojo deben resolverse.
+
+
+3. Si la construcción fue exitosa, pruébalo localmente:
+  ==>>>  npm run start
+ Ingrese y verifique que todo funcione igual de bien que con 
+ .http://localhost:3000npm run dev
+
+
+
+
+
+
+
+
+
+
+npm run dev = (INICIAR)
+CTRL+C      = (DETENER)
+
+
+PRUEVA:
+
+npm run build  =>>INICIAR  
+

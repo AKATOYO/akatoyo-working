@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Estilos base para el modo oscuro y fuente */
+/*body {
+  background-color: #09090b; /* zinc-950 */
+/*  color: #ffffff;
+}
+
+/* Para que los PDF se vean limpios al imprimir */
+/*@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  .print-hidden {
+    display: none !important;
+  }
+}*/

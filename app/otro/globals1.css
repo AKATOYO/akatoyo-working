@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #09090b;
+  color: #ffffff;
+}
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  .print-hidden {
+    display: none !important;
+  }
+  
+  /* --- NUEVAS REGLAS PARA IMPRESIÓN --- */
+  thead {
+    display: table-header-group; /* Fuerza a repetir los títulos de la tabla en cada página */
+  }
+  tr {
+    break-inside: avoid; /* Evita que una fila se corte a la mitad entre páginas */
+  }
+  .print-header {
+    break-after: avoid; /* Evita que el encabezado de la empresa se separe de la tabla */
+  }
+}
