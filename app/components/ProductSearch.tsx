@@ -13,84 +13,10 @@ interface Producto {
   categoria?: string;
 }
 
-// Creamos un componente interno para manejar el estado individual de cada botón
-function ProductCard({ producto }: { producto: Producto }) {
-  const agregarProducto = useCotizacionStore((state) => state.agregarProducto);
-  const [agregado, setAgregado] = useState(false);
-
-  const handleAdd = (e: React.MouseEvent) => {
-    e.preventDefault(); // Previene la navegación
-    e.stopPropagation(); // Evita que el clic llegue al Link de la tarjeta
-    
-    agregarProducto({ id: producto.id, nombre: producto.nombre, precio: producto.precio });
-    setAgregado(true);
-    
-    // Volvemos el botón a la normalidad después de 1.5 segundos
-    setTimeout(() => setAgregado(false), 1500);
-  };
-
-  return (
-    <div className="group flex flex-col bg-zinc-900/50 border border-zinc-800 rounded-3xl p-5 backdrop-blur-sm transition-all duration-500 hover:border-zinc-600 hover:bg-zinc-900/80">
-      
-      {/* Zona cliqueable que lleva al detalle (Imagen y Texto) */}
-      <Link href={`/producto/${producto.id}`} className="flex flex-col flex-1">
-        <div className="w-full aspect-square bg-zinc-800 rounded-2xl overflow-hidden mb-5 relative">
-          <img
-            src={producto.imagen_url}
-            alt={producto.nombre}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
-          />
-        </div>
-
-        <div className="flex flex-col flex-1">
-          {producto.categoria && (
-            <span className="text-xs font-medium text-cyan-400 mb-2 uppercase tracking-wider">
-              {producto.categoria}
-            </span>
-          )}
-          <h2 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-50 transition-colors">
-            {producto.nombre}
-          </h2>
-          <p className="text-zinc-400 text-sm flex-1 line-clamp-2 mb-4">
-            {producto.descripcion}
-          </p>
-        </div>
-      </Link>
-
-      {/* Zona de Precio y Botón (Aislada del Link) */}
-      <div className="mt-auto pt-4 border-t border-zinc-800 flex items-center justify-between gap-4">
-        <span className="text-2xl font-bold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent">
-          ${Number(producto.precio).toLocaleString()}
-        </span>
-        
-        <button
-          onClick={handleAdd}
-          disabled={agregado}
-          className={`flex items-center gap-2 font-semibold py-2.5 px-5 rounded-xl transition-all duration-300 text-sm ${
-            agregado 
-              ? 'bg-green-500 text-white cursor-default shadow-lg shadow-green-500/20' 
-              : 'bg-cyan-500 text-black hover:bg-cyan-400 cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.3)]'
-          }`}
-        >
-          {agregado ? (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              ¡Agregado!
-            </>
-          ) : (
-            <>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
-              AGREGAR
-            </>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Componente principal que recibe los productos
 export default function ProductSearch({ productos }: { productos: Producto[] }) {
+  const agregarProducto = useCotizacionStore((state) => state.agregarProducto);
+  const [recentlyAdded, setRecentlyAdded] = useState<Set<string | number>>(new Set());
+
   if (!productos || productos.length === 0) {
     return (
       <div className="text-center py-24 bg-zinc-900/50 rounded-3xl border border-zinc-800">
@@ -100,11 +26,91 @@ export default function ProductSearch({ productos }: { productos: Producto[] }) 
     );
   }
 
+  const handleAdd = (e: React.MouseEvent, producto: Producto) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    agregarProducto({ id: producto.id, nombre: producto.nombre, precio: producto.precio });
+    setRecentlyAdded(prev => new Set(prev).add(producto.id));
+    
+    setTimeout(() => {
+      setRecentlyAdded(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(producto.id);
+        return newSet;
+      });
+    }, 1500);
+  };
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-      {productos.map((producto) => (
-        <ProductCard key={producto.id} producto={producto} />
-      ))}
+    <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8">
+      {productos.map((producto) => {
+        const agregado = recentlyAdded.has(producto.id);
+        
+        return (
+          <div key={producto.id} className="group flex flex-col bg-zinc-900/50 border border-zinc-800 rounded-3xl p-5 backdrop-blur-sm transition-all duration-500 hover:border-zinc-600 hover:bg-zinc-900/80">
+            <Link href={`/producto/${producto.id}`} className="flex flex-col flex-1">
+              <div className="w-full aspect-square bg-zinc-800 rounded-2xl overflow-hidden mb-5 relative">
+                <img
+                  src={producto.imagen_url}
+                  alt={producto.nombre}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+                  onError={(e) => {
+                    e.currentTarget.src = "/path/to/fallback-image.jpg";
+                  }}
+                />
+              </div>
+
+              <div className="flex flex-col flex-1">
+                {producto.categoria && (
+                  <span className="text-xs font-medium text-cyan-400 mb-2 uppercase tracking-wider">
+                    {producto.categoria}
+                  </span>
+                )}
+                <h2 className="text-xl font-bold text-white mb-2 group-hover:text-cyan-50 transition-colors">
+                  {producto.nombre}
+                </h2>
+                <p className="text-zinc-400 text-sm flex-1 line-clamp-2 mb-4">
+                  {producto.descripcion}
+                </p>
+              </div>
+            </Link>
+
+            <div className="mt-auto pt-4 border-t border-zinc-800 flex items-center justify-between gap-4">
+              <span className="text-2xl font-bold bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent">
+                ${Number(producto.precio).toLocaleString()}
+              </span>
+              
+              <button
+                onClick={(e) => handleAdd(e, producto)}
+                disabled={agregado}
+                aria-label={agregado ? "Producto agregado al carrito" : "Agregar al carrito"}
+                className={`flex items-center gap-2 font-semibold py-2.5 px-5 rounded-xl transition-all duration-300 text-sm ${
+                  agregado 
+                    ? 'bg-green-500 text-white cursor-default shadow-lg shadow-green-500/20' 
+                    : 'bg-cyan-500 text-black hover:bg-cyan-400 cursor-pointer shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+                }`}
+              >
+                {agregado ? (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    ¡Agregado!
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    AGREGAR
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
