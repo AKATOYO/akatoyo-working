@@ -1,8 +1,10 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useCotizacionStore } from "../store/cotizacionStore";
+import { toast } from "react-hot-toast";
 
 interface Product {
   id: string | number;
@@ -30,9 +32,10 @@ export default function AddToQuoteButton({ producto }: { producto: Product }) {
     try {
       await agregarProducto(producto);
       setIsAdded(true);
+      toast.success("¡Producto agregado a la cotización!");
     } catch (error) {
       console.error("Error al agregar producto:", error);
-      // Optionally implement error state here
+      toast.error("Error al agregar el producto. Por favor, intenta de nuevo.");
     } finally {
       setIsLoading(false);
     }
