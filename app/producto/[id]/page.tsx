@@ -1,177 +1,112 @@
-import { supabase } from "@/lib/supabase";
-import Link from "next/link";
-import AddToQuoteButton from "../../components/AddToQuoteButton";
-import ShareButtons from "../../components/ShareButtons";
-import Image from "next/image";
-import type { Metadata } from "next";
+import { notFound } from 'next/navigation';
+import Image from 'next/image';
+import { getProductById, getRelatedProducts } from '@/lib/product-api';
+import { AddToCartButton } from '@/components/add-to-cart-button';
+import { ProductImages } from '@/components/product-images';
+import { ProductInfo } from '@/components/product-info';
 
-// Type definitions
-interface Product {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  precio: number;
-  imagen_url: string;
-  categoria: string;
-  stock: number;
+interface ProductPageProps {
+  params: {
+    id: string;
+  };
 }
 
-type Props = { params: Promise<{ id: string }> };
+export default async function ProductPage({ params }: ProductPageProps) {
+  const productId = params.id;
 
-// Product Card Component
-function ProductCard({ producto }: { producto: Product }) {
-  return (
-    <div className="w-full aspect-square overflow-hidden rounded-3xl bg-zinc-900 border border-zinc-800 shadow-2xl">
-      <Image
-        src={producto.imagen_url}
-        alt={producto.nombre}
-        width={600}
-        height={600}
-        className="w-full h-full object-cover"
-        priority
-      />
-    </div>
-  );
-}
+  // Validate product ID
+  if (!productId || isNaN(Number(productId))) {
+    notFound();
+  }
 
-// Metadata generation
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
   try {
-    const { id } = await params;
-    const { data: p, error } = await supabase.from("productos").select("*").eq("id", id).single();
+    // Fetch product data
+    const product = await getProductById(productId);
     
-    if (error) throw error;
-    
-    return { 
-      title: p?.nombre || "Producto", 
-      description: p?.descripcion || "Descripción del producto",
-      keywords: [p?.nombre, p?.categoria, "producto", "akatoyo"].filter(Boolean).join(", "),
-      openGraph: { 
-        title: p?.nombre,
-        description: `Cómpralo por $${Number(p?.precio).toLocaleString()} en Akatoyo. ${p?.descripcion}`,
-        images: [{ url: p?.imagen_url || "", width: 1200, height: 630 }],
-        type: "product",
-        priceCurrency: "USD",
-        price: Number(p?.precio).toFixed(2)
-      },
-      twitter: {
-        card: 'summary_large_image',
-        title: p?.nombre,
-        description: p?.descripcion,
-        images: [p?.imagen_url || ""]
-      }
-    };
+    if (!product) {
+      notFound();
+    }
+
+    // Fetch related products
+    const relatedProducts = await getRelatedProducts(product.categoryId, productId);
+
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Product Images Section */}
+          <div className="space-y-4">
+            <ProductImages images={product.images} />
+          </div>
+
+          {/* Product Info Section */}
+          <div className="space-y-6">
+            <div>
+              <h1 className="text-3xl font-bold">{product.name}</h1>
+              <p className="text-gray-600 mt-2">{product.description}</p>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              <span className="text-2xl font-bold">${product.price.toFixed(2)}</span>
+              {product.stock > 0 ? (
+                <span className="text-green-600">In Stock ({product.stock} available)</span>
+              ) : (
+                <span className="text-red-600">Out of Stock</span>
+              )}
+            </div>
+
+            <ProductInfo 
+              specifications={product.specifications} 
+              features={product.features} 
+            />
+
+            <AddToCartButton 
+              productId={product.id} 
+              disabled={product.stock === 0}
+            />
+          </div>
+        </div>
+
+        {/* Related Products Section */}
+        {relatedProducts.length > 0 && (
+          <div className="mt-12">
+            <h2 className="text-2xl font-bold mb-6">Related Products</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+              {relatedProducts.map((relatedProduct) => (
+                <div key={relatedProduct.id} className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow">
+                  <div className="relative h-48">
+                    <Image
+                      src={relatedProduct.images[0] || '/placeholder-product.png'}
+                      alt={relatedProduct.name}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <h3 className="font-semibold">{relatedProduct.name}</h3>
+                    <p className="text-gray-600 mt-1">${relatedProduct.price.toFixed(2)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
   } catch (error) {
-    console.error('Error fetching product metadata:', error);
-    return {
-      title: "Producto",
-      description: "Producto no encontrado",
-    };
+    console.error('Error fetching product:', error);
+    notFound();
   }
 }
 
-// Static generation
+// Generate static params for all products
 export async function generateStaticParams() {
-  const { data } = await supabase.from("productos").select("id");
-  return data?.map(({ id }) => ({ id })) || [];
-}
-
-// Revalidation
-export const revalidate = 3600; // Revalidate at most every hour
-
-// Main component
-export default async function ProductoPage({ params }: Props) {
   try {
-    const { id } = await params;
-    const { data: producto, error } = await supabase.from("productos").select("*").eq("id", id).single();
-
-    if (error || !producto) {
-      throw error || new Error('Product not found');
-    }
-
-    return (
-      <div className="relative min-h-screen bg-zinc-950 text-white overflow-hidden">
-        <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-cyan-500/10 blur-[120px] rounded-full pointer-events-none" />
-
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-12 md:py-20">
-          <Link 
-            href="/" 
-            className="inline-flex items-center gap-2 text-zinc-400 hover:text-white mb-8 transition-colors group"
-            aria-label="Volver al catálogo"
-          >
-            <svg className="w-4 h-4 group-hover:-translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-            Volver al catálogo
-          </Link>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-start">
-            <ProductCard producto={producto} />
-
-            <div className="flex flex-col">
-              <div 
-                className="flex items-center justify-between mb-4" 
-                role="status" 
-                aria-live="polite"
-              >
-                <span className="text-sm font-medium uppercase tracking-wider text-cyan-400">
-                  {producto.categoria}
-                </span>
-                <span 
-                  className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                    producto.stock > 0 
-                      ? 'bg-green-500/10 text-green-400' 
-                      : 'bg-red-500/10 text-red-500'
-                  }`}
-                  aria-label={
-                    producto.stock > 0 
-                      ? `En stock (${producto.stock} unidades disponibles)` 
-                      : 'Producto agotado'
-                  }
-                >
-                  {producto.stock > 0 ? `En stock (${producto.stock})` : 'Agotado'}
-                </span>
-              </div>
-
-              <h1 className="text-4xl md:text-5xl font-bold leading-tight bg-gradient-to-r from-white to-zinc-300 bg-clip-text text-transparent">
-                {producto.nombre}
-              </h1>
-
-              <p className="text-base md:text-lg text-zinc-400 leading-relaxed mt-4">
-                {producto.descripcion}
-              </p>
-
-              <div className="mt-6">
-                <span className="text-5xl md:text-6xl font-bold text-white">
-                  ${Number(producto.precio).toLocaleString()}
-                </span>
-              </div>
-
-              <AddToQuoteButton producto={{ 
-                id: producto.id, 
-                nombre: producto.nombre, 
-                precio: producto.precio 
-              }} />
-
-              <ShareButtons 
-                nombre={producto.nombre} 
-                precio={producto.precio} 
-                descripcion={producto.descripcion} 
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    const products = await getAllProducts(); // Assuming you have this function
+    return products.map((product) => ({
+      id: product.id.toString(),
+    }));
   } catch (error) {
-    console.error('Error loading product:', error);
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-white gap-4">
-        <h1 className="text-2xl font-bold">Producto no encontrado</h1>
-        <Link href="/" className="text-cyan-400 hover:underline" aria-label="Volver al catálogo">
-          Volver al catálogo
-        </Link>
-      </div>
-    );
+    console.error('Error generating static params:', error);
+    return [];
   }
 }
