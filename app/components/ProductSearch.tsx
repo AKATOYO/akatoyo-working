@@ -5,8 +5,7 @@ import { useState, useEffect } from "react";
 import { useCotizacionStore } from "../store/cotizacionStore";
 import { toast } from "react-hot-toast";
 
-// 1. Interfaces base para datos y estados
-export interface Producto {
+interface Producto {
   id: string | number;
   nombre: string;
   descripcion: string;
@@ -15,33 +14,14 @@ export interface Producto {
   categoria?: string;
 }
 
-// Subconjunto de datos que requiere la función agregarProducto del store
-interface ProductoCotizacion {
-  id: string | number;
-  nombre: string;
-  precio: number;
-}
-
-interface CotizacionState {
-  agregarProducto: (producto: ProductoCotizacion) => void;
-}
-
-interface ProductSearchProps {
-  productos: Producto[];
-}
-
-export default function ProductSearch({ productos }: ProductSearchProps) {
-  // Tipado explícito para el estado global de Zustand
-  const agregarProducto = useCotizacionStore(
-    (state: CotizacionState) => state.agregarProducto
-  );
-  
+export default function ProductSearch({ productos }: { productos: Producto[] }) {
+  const agregarProducto = useCotizacionStore((state) => state.agregarProducto);
   const [recentlyAdded, setRecentlyAdded] = useState<Set<string | number>>(new Set());
-  const [currentPage, setCurrentPage] = useState<number>(1);
-  const itemsPerPage: number = 12;
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
 
-  // Limpieza del set de agregados recientemente
   useEffect(() => {
+    // Clear recently added items after animation
     const timer = setTimeout(() => {
       setRecentlyAdded(new Set());
     }, 2000);
@@ -60,23 +40,18 @@ export default function ProductSearch({ productos }: ProductSearchProps) {
     );
   }
 
-  // Lógica de paginación
-  const totalPages: number = Math.ceil(productos.length / itemsPerPage);
-  const startIndex: number = (currentPage - 1) * itemsPerPage;
-  const paginatedProductos: Producto[] = productos.slice(startIndex, startIndex + itemsPerPage);
+  // Calculate pagination
+  const totalPages = Math.ceil(productos.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedProductos = productos.slice(startIndex, startIndex + itemsPerPage);
 
-  // Tipado estricto del evento de clic del mouse
-  const handleAdd = (e: React.MouseEvent<HTMLButtonElement>, producto: Producto): void => {
+  const handleAdd = (e: React.MouseEvent, producto: Producto) => {
     e.preventDefault();
     e.stopPropagation();
     
     try {
       agregarProducto({ id: producto.id, nombre: producto.nombre, precio: producto.precio });
-      setRecentlyAdded(prev => {
-        const next = new Set(prev);
-        next.add(producto.id);
-        return next;
-      });
+      setRecentlyAdded(prev => new Set(prev).add(producto.id));
       toast.success("¡Producto agregado a la cotización!");
     } catch (error) {
       console.error("Error al agregar producto:", error);
@@ -88,7 +63,7 @@ export default function ProductSearch({ productos }: ProductSearchProps) {
     <div>
       <div className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 md:gap-8">
         {paginatedProductos.map((producto) => {
-          const agregado: boolean = recentlyAdded.has(producto.id);
+          const agregado = recentlyAdded.has(producto.id);
           
           return (
             <div key={producto.id} className="group flex flex-col bg-zinc-900/50 border border-zinc-800 rounded-3xl p-5 backdrop-blur-sm transition-all duration-500 hover:border-zinc-600 hover:bg-zinc-900/80">
@@ -99,7 +74,7 @@ export default function ProductSearch({ productos }: ProductSearchProps) {
                     alt={producto.nombre}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
                     loading="lazy"
-                    onError={(e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+                    onError={(e) => {
                       e.currentTarget.src = "/path/to/fallback-image.jpg";
                     }}
                   />
@@ -157,7 +132,7 @@ export default function ProductSearch({ productos }: ProductSearchProps) {
         })}
       </div>
 
-      {/* Control de paginación */}
+      {/* Pagination */}
       {totalPages > 1 && (
         <div className="mt-8 flex justify-center gap-2">
           <button
