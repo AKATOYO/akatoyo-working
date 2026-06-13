@@ -44,8 +44,13 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       throw error || new Error('Product not found');
     }
 
-    // Fetch font
-    const fontData = await fetch(new URL('/Geist-Regular.ttf', import.meta.url)).then(res => res.arrayBuffer())
+    // Try to load font, fallback to system font if fails
+    let fontData;
+    try {
+      fontData = await fetch(new URL('/Geist-Regular.ttf', import.meta.url)).then(res => res.arrayBuffer());
+    } catch (fontError) {
+      console.warn('Failed to load custom font, using system font', fontError);
+    }
 
     return new ImageResponse(
       (
@@ -60,19 +65,20 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       ),
       {
         ...size,
-        fonts: [
+        fonts: fontData ? [
           {
             name: 'Geist',
             data: fontData,
             style: 'normal',
             weight: 400,
           },
-        ],
+        ] : undefined,
       }
     )
   } catch (error) {
     console.error('Error generating OG image:', error);
     
+    // Fallback OG image
     return new ImageResponse(
       (
         <div tw="flex flex-col w-full h-full bg-zinc-950 text-white p-12">
