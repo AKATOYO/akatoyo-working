@@ -2,19 +2,19 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { supabase } from '@/lib/supabase';
 
-// Constants
-const IVA_RATE = 0.19;
-const MIN_QUANTITY = 1;
+// Constantes globales de configuración de negocio
+const IVA_RATE: number = 0.19;
+const MIN_QUANTITY: number = 1;
 
-// Types
-interface ProductoCotizacion {
-  id: string;
+// 1. Interfaces estrictas para el dominio del Estado
+export interface ProductoCotizacion {
+  id: string | number;
   nombre: string;
   precio: number;
   cantidad: number;
 }
 
-interface ClienteData {
+export interface ClienteData {
   nombre: string;
   email: string;
   telefono: string;
@@ -22,38 +22,47 @@ interface ClienteData {
   acepta_ofertas: boolean;
 }
 
-interface CotizacionState {
+export interface CotizacionState {
   items: ProductoCotizacion[];
   numeroCotizacion: number;
   incluirIva: boolean;
-  cliente: ClienteData;
   isSaving: boolean;
   isSaved: boolean;
   error: string | null;
+  cliente: ClienteData;
   
-  // Actions
+  // Acciones sobre el estado
   agregarProducto: (producto: Omit<ProductoCotizacion, 'cantidad'>) => void;
-  eliminarProducto: (id: string) => void;
-  actualizarCantidad: (id: string, cantidad: number) => void;
+  eliminarProducto: (id: string | number) => void;
+  actualizarCantidad: (id: string | number, cantidad: number) => void;
   toggleIva: () => void;
   limpiarCotizacion: () => void;
   actualizarCliente: (data: Partial<ClienteData>) => void;
   guardarCotizacion: () => Promise<boolean>;
   
-  // Calculations
+  // Selectores internos de cálculos de facturación
   subtotal: () => number;
   montoIva: () => number;
   total: () => number;
 }
 
-// Helper function
-const generarNumCotizacion = () => Math.floor(100000 + Math.random() * 900000);
+// Interfaces auxiliares para tipar las tablas relacionales de Supabase
+interface ClienteDbRow {
+  id: string | number;
+}
 
-// Store creation with persistence
+interface CabeceraDbRow {
+  id: string | number;
+}
+
+// Función generadora de identificadores de cotizaciones
+const generarNumCotizacion = (): number => Math.floor(100000 + Math.random() * 900000);
+
+// 2. Creación del Store Global con middleware de Persistencia
 export const useCotizacionStore = create<CotizacionState>()(
   persist(
     (set, get) => ({
-      // Initial state
+      // Estado Inicial
       items: [],
       numeroCotizacion: generarNumCotizacion(),
       incluirIva: true,
@@ -68,8 +77,8 @@ export const useCotizacionStore = create<CotizacionState>()(
         acepta_ofertas: false 
       },
 
-      // Actions
-      agregarProducto: (producto) => set((state) => {
+      // Implementación de Acciones
+      agregarProducto: (producto) => set((state: CotizacionState) => {
         const existente = state.items.find(item => item.id === producto.id);
         if (existente) {
           return { 
@@ -87,12 +96,12 @@ export const useCotizacionStore = create<CotizacionState>()(
         };
       }),
 
-      eliminarProducto: (id) => set((state) => ({ 
+      eliminarProducto: (id) => set((state: CotizacionState) => ({ 
         items: state.items.filter(item => item.id !== id), 
         isSaved: false 
       })),
 
-      actualizarCantidad: (id, cantidad) => set((state) => ({
+      actualizarCantidad: (id, cantidad) => set((state: CotizacionState) => ({
         items: state.items.map(item => 
           item.id === id 
             ? { ...item, cantidad: Math.max(MIN_QUANTITY, cantidad) } 
@@ -101,7 +110,7 @@ export const useCotizacionStore = create<CotizacionState>()(
         isSaved: false
       })),
 
-      toggleIva: () => set((state) => ({ 
+      toggleIva: () => set((state: CotizacionState) => ({ 
         incluirIva: !state.incluirIva, 
         isSaved: false 
       })),
@@ -121,8 +130,8 @@ export const useCotizacionStore = create<CotizacionState>()(
         error: null
       }),
 
-      actualizarCliente: (data) => set((state) => {
-        const validatedData = {
+      actualizarCliente: (data) => set((state: CotizacionState) => {
+        const validatedData: Partial<ClienteData> = {
           ...data,
           email: data.email ? data.email.toLowerCase() : state.cliente.email
         };
@@ -133,26 +142,26 @@ export const useCotizacionStore = create<CotizacionState>()(
         };
       }),
 
-      guardarCotizacion: async () => {
+      guardarCotizacion: async (): Promise<boolean> => {
         const state = get();
         if (state.isSaving || state.isSaved) return true;
 
         set({ isSaving: true, error: null });
 
         try {
-          // 1. Search or create client
+          // 1. Buscar o registrar al cliente en la base de datos externa
           const { data: existingClient, error: searchError } = await supabase
             .from('clientes')
             .select('id')
             .eq('email', state.cliente.email)
-            .maybeSingle();
+            .maybeSingle<ClienteDbRow>();
 
           if (searchError) throw searchError;
 
-          let clienteId = existingClient?.id;
+          let clienteId: string | number | undefined = existingClient?.id;
 
           if (!clienteId) {
-            // Create new client
+            // Alta de nuevo prospecto / cliente
             const { data: newClient, error: insertClientError } = await supabase
               .from('clientes')
               .insert({
@@ -163,13 +172,13 @@ export const useCotizacionStore = create<CotizacionState>()(
                 acepta_ofertas: state.cliente.acepta_ofertas,
               })
               .select('id')
-              .single();
+              .single<ClienteDbRow>();
 
             if (insertClientError) throw insertClientError;
             clienteId = newClient.id;
           } else {
-            // Update existing client
-            await supabase
+            // Actualización de datos de contacto preexistentes
+            const { error: updateClientError } = await supabase
               .from('clientes')
               .update({
                 nombre: state.cliente.nombre,
@@ -178,9 +187,11 @@ export const useCotizacionStore = create<CotizacionState>()(
                 acepta_ofertas: state.cliente.acepta_ofertas,
               })
               .eq('id', clienteId);
+
+            if (updateClientError) throw updateClientError;
           }
 
-          // 2. Create quotation header
+          // 2. Generar el documento de la cabecera de la cotización
           const { data: cabecera, error: errorCabecera } = await supabase
             .from('cotizaciones')
             .insert({
@@ -191,11 +202,11 @@ export const useCotizacionStore = create<CotizacionState>()(
               total: state.total(),
             })
             .select('id')
-            .single();
+            .single<CabeceraDbRow>();
 
           if (errorCabecera) throw errorCabecera;
 
-          // 3. Insert quotation details
+          // 3. Insertar el desglose de productos asociados (Partidas)
           const detalles = state.items.map(item => ({
             cotizacion_id: cabecera.id,
             producto_id: item.id,
@@ -204,12 +215,15 @@ export const useCotizacionStore = create<CotizacionState>()(
             cantidad: item.cantidad,
           }));
 
-          const { error: errorDetalles } = await supabase.from('cotizaciones_detalle').insert(detalles);
+          const { error: errorDetalles } = await supabase
+            .from('cotizaciones_detalle')
+            .insert(detalles);
+            
           if (errorDetalles) throw errorDetalles;
 
           set({ isSaving: false, isSaved: true });
           return true;
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Error al guardar en Supabase:', error);
           set({ 
             isSaving: false, 
@@ -219,26 +233,26 @@ export const useCotizacionStore = create<CotizacionState>()(
         }
       },
 
-      // Calculations
-      subtotal: () => {
+      // Selectores de lógica de cálculos financieros
+      subtotal: (): number => {
         const state = get();
         return state.items.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
       },
 
-      montoIva: () => {
+      montoIva: (): number => {
         const state = get();
         return state.incluirIva ? state.subtotal() * IVA_RATE : 0;
       },
 
-      total: () => {
+      total: (): number => {
         const state = get();
         return state.subtotal() + state.montoIva();
       },
     }),
     {
       name: 'cotizacion-storage',
-      // Only persist specific state
-      partialize: (state) => ({
+      // Serializamos y filtramos únicamente las ramas necesarias para LocalStorage
+      partialize: (state: CotizacionState) => ({
         items: state.items,
         numeroCotizacion: state.numeroCotizacion,
         incluirIva: state.incluirIva,
