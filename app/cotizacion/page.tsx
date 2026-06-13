@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "react-hot-toast";
 
-// Type definitions
-interface Cliente {
+// 1. Interfaces estrictas para el dominio de datos
+export interface Cliente {
   nombre: string;
   email: string;
   telefono: string;
@@ -14,14 +14,34 @@ interface Cliente {
   acepta_ofertas: boolean;
 }
 
-interface Item {
-  id: string;
+export interface Item {
+  id: string | number;
   nombre: string;
   precio: number;
   cantidad: number;
 }
 
+// 2. Interfaz que mapea las funciones y propiedades que expone tu Zustand Store
+interface CotizacionState {
+  items: Item[];
+  numeroCotizacion: string | number;
+  incluirIva: boolean;
+  cliente: Cliente;
+  isSaving: boolean;
+  isSaved: boolean;
+  actualizarCantidad: (id: string | number, cantidad: number) => void;
+  eliminarProducto: (id: string | number) => void;
+  toggleIva: () => void;
+  actualizarCliente: (cliente: Partial<Cliente>) => void;
+  subtotal: () => number;
+  montoIva: () => number;
+  total: () => number;
+  limpiarCotizacion: () => void;
+  guardarCotizacion: () => Promise<boolean> | boolean;
+}
+
 export default function CotizacionPage() {
+  // Inyección del estado de Zustand con tipado explícito
   const { 
     items, 
     numeroCotizacion, 
@@ -38,104 +58,103 @@ export default function CotizacionPage() {
     total, 
     limpiarCotizacion, 
     guardarCotizacion 
-  } = useCotizacionStore();
+  } = useCotizacionStore((state: CotizacionState) => state);
 
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  // Memoized calculations
+  // Memorización de cálculos para evitar re-renders innecesarios
   const calculatedValues = useMemo(() => ({
     subtotal: subtotal(),
     montoIva: montoIva(),
     total: total(),
     formattedTotal: total().toLocaleString()
-  }), [subtotal, montoIva, total]);
+  }), [subtotal, montoIva, total, items, incluirIva]);
 
-  // Auto-save functionality
+  // Funcionalidad de Auto-guardado cada 30 segundos
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (items.length > 0 && !isSaved) {
-        guardarCotizacion();
+    const timer = setTimeout(async () => {
+      if (items.length > 0 && !isSaved && !isSaving) {
+        await guardarCotizacion();
       }
-    }, 30000); // Auto-save every 30 seconds
+    }, 30000);
     
     return () => clearTimeout(timer);
-  }, [items, isSaved, guardarCotizacion]);
+  }, [items, isSaved, isSaving, guardarCotizacion]);
 
-  // Enhanced validation with error messages
+  // Validación de negocio con tipado estricto
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
 
     if (!cliente.nombre?.trim()) {
-      errors.nombre = "⚠️ Acción requerida:\nPor favor, ingresa el Nombre del cliente.";
+      errors.nombre = "⚠️ Nombre requerido.";
     }
     if (!cliente.email?.trim()) {
-      errors.email = "⚠️ Acción requerida:\nPor favor, ingresa el Email del cliente.";
+      errors.email = "⚠️ Email requerido.";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cliente.email)) {
-      errors.email = "⚠️ Formato inválido:\nPor favor, ingresa un email válido.";
+      errors.email = "⚠️ Formato de email inválido.";
     }
     if (!cliente.telefono?.trim()) {
-      errors.telefono = "⚠️ Acción requerida:\nPor favor, ingresa el Teléfono del cliente.";
+      errors.telefono = "⚠️ Teléfono requerido.";
     } else if (!/^\+?[\d\s-()]+$/.test(cliente.telefono)) {
-      errors.telefono = "⚠️ Formato inválido:\nPor favor, ingresa un teléfono válido.";
+      errors.telefono = "⚠️ Formato de teléfono inválido.";
     }
     if (!cliente.acepta_ofertas) {
-      errors.acepta_ofertas = "⚠️ Acción requerida:\nDebes autorizar el tratamiento de datos para generar la cotización.";
+      errors.acepta_ofertas = "⚠️ Debes autorizar el tratamiento de datos.";
     }
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  // Improved WhatsApp function with better error handling
-  const enviarWhatsApp = async () => {
+  // Despacho de información hacia la API externa de WhatsApp
+  const enviarWhatsApp = async (): Promise<void> => {
     if (!validateForm()) return;
 
     try {
       if (!isSaved) {
         const exito = await guardarCotizacion();
         if (!exito) {
-          throw new Error("Error al guardar en la base de datos. Inténtalo de nuevo.");
+          throw new Error("Error al guardar en la base de datos.");
         }
       }
 
-      const telefono = "573001234567"; // TU NÚMERO AQUÍ
-      const mensaje = `*Cotización #${numeroCotizacion}*\nCliente: ${cliente.nombre}\n\n` +
+      const telefono: string = "573001234567"; // Código de país + número
+      const mensaje: string = `*Cotización #${numeroCotizacion}*\nCliente: ${cliente.nombre}\n\n` +
         items.map(item => `➡️ ${item.nombre} (x${item.cantidad}): $${(item.precio * item.cantidad).toLocaleString()}`).join('\n') +
         `\n\n*Subtotal:* $${calculatedValues.subtotal.toLocaleString()}` +
         (incluirIva ? `\n*IVA (19%):* $${calculatedValues.montoIva.toLocaleString()}` : '') +
         `\n*Total a pagar:* $${calculatedValues.formattedTotal}`;
 
       window.open(`https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`, '_blank');
-      toast.success("Cotización enviada por WhatsApp!");
+      toast.success("¡Cotización enviada por WhatsApp!");
     } catch (error) {
       console.error('Error al enviar por WhatsApp:', error);
-      toast.error('Error al procesar la solicitud. Por favor, intenta de nuevo.');
+      toast.error('Error al procesar la solicitud. Intenta de nuevo.');
     }
   };
 
-  // Improved PDF generation with better error handling
-  const generarPDF = async () => {
+  // Impresión nativa / Descarga en PDF
+  const generarPDF = async (): Promise<void> => {
     if (!validateForm()) return;
 
     try {
       if (!isSaved) {
         const exito = await guardarCotizacion();
         if (!exito) {
-          throw new Error("Error al guardar en la base de datos. Inténtalo de nuevo.");
+          throw new Error("Error al guardar en la base de datos.");
         }
       }
       window.print();
       toast.success("Preparando documento para imprimir...");
     } catch (error) {
       console.error('Error al generar PDF:', error);
-      toast.error('Error al generar el documento. Por favor, intenta de nuevo.');
+      toast.error('Error al generar el documento.');
     }
   };
 
-  // Handle input changes with validation
-  const handleInputChange = (field: keyof Cliente, value: string | boolean) => {
+  // Manejador polimórfico de inputs
+  const handleInputChange = (field: keyof Cliente, value: string | boolean): void => {
     actualizarCliente({ [field]: value });
-    // Clear error when user starts typing
     if (validationErrors[field]) {
       setValidationErrors(prev => {
         const newErrors = { ...prev };
@@ -163,7 +182,8 @@ export default function CotizacionPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-white px-4 py-12">
       <div className="max-w-4xl mx-auto">
-        {/* Web View (Hidden when printing) */}
+        
+        {/* VISTA WEB (Oculta al imprimir gracias a las clases utilitarias de Tailwind) */}
         <div className="print:hidden">
           <div className="flex justify-between items-start mb-8">
             <div>
@@ -172,7 +192,7 @@ export default function CotizacionPage() {
               </Link>
               <h1 className="text-4xl font-bold">
                 Cotización <span className="text-cyan-400">#{numeroCotizacion}</span>
-                {isSaved && <span className="text-sm text-green-500 ml-3 font-normal">● Guardado en BD</span>}
+                {isSaved && <span className="text-sm text-green-500 ml-3 font-normal">● Guardado</span>}
               </h1>
             </div>
             <button 
@@ -183,233 +203,50 @@ export default function CotizacionPage() {
             </button>
           </div>
 
-          {/* Customer Form */}
+          {/* Formulario del Cliente */}
           <div className="mb-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-            <h3 className="text-lg font-bold text-white mb-1">Datos del Cliente</h3>
-            <p className="text-xs text-zinc-500 mb-4">
-              Los campos marcados con * son obligatorios para cotizar.
-            </p>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries({
-                nombre: { label: 'Nombre completo', required: true, value: cliente.nombre },
-                empresa: { label: 'Empresa', required: false, value: cliente.empresa },
-                email: { label: 'Email', required: true, value: cliente.email },
-                telefono: { label: 'Teléfono', required: true, value: cliente.telefono }
-              }).map(([field, { label, required, value }]) => (
+            <h3 className="text-lg font-bold text-white mb-4">Datos del Cliente</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {(['nombre', 'empresa', 'email', 'telefono'] as const).map((field) => (
                 <div key={field}>
-                  <label className="text-xs text-zinc-400 mb-1 block">
-                    {label} {required && <span className="text-red-500">*</span>}
-                  </label>
+                  <label className="text-xs text-zinc-400 mb-1 block capitalize">{field}</label>
                   <input
-                    type={field === 'email' ? 'email' : field === 'telefono' ? 'tel' : 'text'}
-                    placeholder={field === 'nombre' ? 'Juan Pérez' : 
-                               field === 'email' ? 'correo@ejemplo.com' :
-                               field === 'telefono' ? '+57 300 1234567' : 
-                               'Mi empresa (Opcional)'}
-                    value={value || ''}
-                    onChange={(e) => handleInputChange(field as keyof Cliente, e.target.value)}
-                    className={`w-full bg-zinc-800 border ${
-                      validationErrors[field] ? 'border-red-500' : 'border-zinc-700'
-                    } rounded-lg px-4 py-3 text-white placeholder-zinc-600 focus:ring-2 focus:ring-cyan-500 outline-none`}
-                    required={required}
+                    type={field === 'email' ? 'email' : 'text'}
+                    value={cliente[field] || ''}
+                    onChange={(e) => handleInputChange(field, e.target.value)}
+                    className={`w-full bg-zinc-800 border ${validationErrors[field] ? 'border-red-500' : 'border-zinc-700'} rounded-lg p-2 text-white focus:outline-none focus:border-cyan-500`}
                   />
-                  {validationErrors[field] && (
-                    <p className="text-red-500 text-xs mt-1">{validationErrors[field]}</p>
-                  )}
+                  {validationErrors[field] && <p className="text-red-500 text-xs mt-1">{validationErrors[field]}</p>}
                 </div>
               ))}
             </div>
-            
-            {/* Authorization Checkbox */}
-            <div className="mt-5 p-4 bg-zinc-800/50 rounded-xl border border-zinc-700">
-              <div className="flex items-start gap-3">
-                <input 
-                  type="checkbox" 
-                  id="ofertas" 
-                  checked={cliente.acepta_ofertas} 
-                  onChange={(e) => handleInputChange('acepta_ofertas', e.target.checked)}
-                  className="w-5 h-5 mt-0.5 rounded bg-zinc-800 border-zinc-600 text-cyan-500 focus:ring-cyan-500 cursor-pointer accent-cyan-500"
-                />
-                <label htmlFor="ofertas" className="text-sm text-zinc-300 cursor-pointer">
-                  <span className="text-red-500 font-bold">*</span> Autorizo el tratamiento de mis datos personales y deseo recibir ofertas. 
-                  Al generar o enviar la cotización, se guardará un registro en nuestro sistema.
-                </label>
-              </div>
-              {validationErrors.acepta_ofertas && (
-                <p className="text-red-500 text-xs mt-2">{validationErrors.acepta_ofertas}</p>
-              )}
-            </div>
-          </div>
-        </div>
 
-        {/* Print View */}
-        <div className="hidden print:block mb-8 text-black border-b-2 border-gray-300 pb-6 print-header">
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-3xl font-bold text-black">AKATOYO</h2>
-              <p className="text-sm text-gray-600 mt-1">NIT: 123.456.789-0</p>
-              <p className="text-sm text-gray-600">Teléfono: +57 300 123 4567</p>
-            </div>
-            <div className="text-right">
-              <h3 className="text-2xl font-bold text-gray-700">COTIZACIÓN</h3>
-              <p className="text-xl font-semibold text-black">#{numeroCotizacion}</p>
-              <p className="text-sm text-gray-600 mt-2">Fecha: {new Date().toLocaleDateString()}</p>
-            </div>
+            <label className="flex items-center gap-2 cursor-pointer mt-4">
+              <input 
+                type="checkbox" 
+                checked={cliente.acepta_ofertas} 
+                onChange={(e) => handleInputChange('acepta_ofertas', e.target.checked)}
+                className="rounded border-zinc-700 bg-zinc-800 text-cyan-500"
+              />
+              <span className="text-xs text-zinc-400">Autorizo el tratamiento de datos personales para fines comerciales.</span>
+            </label>
+            {validationErrors.acepta_ofertas && <p className="text-red-500 text-xs mt-1">{validationErrors.acepta_ofertas}</p>}
           </div>
-          <div className="mt-6 bg-gray-100 p-4 rounded-lg border border-gray-200">
-            <h4 className="font-bold text-gray-800 mb-1 border-b border-gray-300 pb-1">DATOS DEL CLIENTE</h4>
-            <p className="text-sm"><span className="font-semibold">Nombre:</span> {cliente.nombre}</p>
-            <p className="text-sm"><span className="font-semibold">Empresa:</span> {cliente.empresa || 'N/A'}</p>
-            <p className="text-sm"><span className="font-semibold">Email:</span> {cliente.email}</p>
-            <p className="text-sm"><span className="font-semibold">Teléfono:</span> {cliente.telefono}</p>
-            <p className="text-sm mt-1">
-              <span className="font-semibold">Autoriza tratamiento de datos:</span> 
-              <span className="font-bold text-green-700"> SÍ</span>
-            </p>
-          </div>
-        </div>
 
-        {/* Products Table */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden print:border-gray-300 print:bg-white print:rounded-none">
-          <table className="w-full text-left">
-            <thead className="hidden md:table-header-group bg-zinc-800/50 text-xs text-zinc-400 uppercase tracking-wider border-b border-zinc-700 print:table-header-group print:bg-gray-100 print:text-black print:border-gray-300">
-              <tr>
-                <th className="px-6 py-3 w-[40%]">Producto</th>
-                <th className="px-6 py-3 w-[20%] text-center">Precio</th>
-                <th className="px-6 py-3 w-[25%] text-center">Cantidad</th>
-                <th className="px-6 py-3 w-[15%] text-right">Subtotal</th>
-                <th className="px-6 py-3 w-[10px] print:hidden"></th>
-              </tr>
-            </thead>
-            <tbody>
+          {/* Lista de Artículos */}
+          <div className="mb-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+            <h3 className="text-lg font-bold text-white mb-4">Productos seleccionados</h3>
+            <div className="space-y-4">
               {items.map((item) => (
-                <tr key={item.id} className="border-b border-zinc-800 hover:bg-zinc-800/30 transition-colors print:border-gray-200 print:text-black print:hover:bg-white">
-                  <td className="px-6 py-4 font-medium">{item.nombre}</td>
-                  <td className="px-6 py-4 text-center text-zinc-400 print:text-gray-600">${Number(item.precio).toLocaleString()}</td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-2 print:hidden">
+                <div key={item.id} className="flex justify-between items-center bg-zinc-800/50 p-4 rounded-xl border border-zinc-800">
+                  <div>
+                    <h4 className="font-bold text-white">{item.nombre}</h4>
+                    <p className="text-sm text-zinc-400">${item.precio.toLocaleString()} c/u</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center bg-zinc-800 rounded-lg overflow-hidden border border-zinc-700">
                       <button 
-                        onClick={() => actualizarCantidad(item.id, item.cantidad - 1)}
-                        className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center disabled:opacity-50"
-                        disabled={item.cantidad <= 1}
-                        aria-label="Disminuir cantidad"
+                        onClick={() => actualizarCantidad(item.id, Math.max(1, item.cantidad - 1))}
+                        className="px-3 py-1 hover:bg-zinc-700 text-zinc-400"
                       >
                         -
-                      </button>
-                      <span className="w-8 text-center font-bold">{item.cantidad}</span>
-                      <button 
-                        onClick={() => actualizarCantidad(item.id, item.cantidad + 1)}
-                        className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-white flex items-center justify-center"
-                        aria-label="Aumentar cantidad"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <span className="hidden print:inline">{item.cantidad}</span>
-                  </td>
-                  <td className="px-6 py-4 text-right font-bold">${(item.precio * item.cantidad).toLocaleString()}</td>
-                  <td className="px-6 py-4 text-right print:hidden">
-                    <button 
-                      onClick={() => eliminarProducto(item.id)}
-                      className="text-red-500 hover:text-red-400"
-                      title="Eliminar producto"
-                      aria-label="Eliminar producto"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Summary / IVA */}
-        <div className="mt-8 flex flex-col md:flex-row justify-between gap-8">
-          <div className="print:hidden">
-            <div className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-              <span className={`text-sm ${!incluirIva ? 'text-cyan-400 font-bold' : 'text-zinc-500'}`}>
-                Sin IVA
-              </span>
-              <button 
-                onClick={toggleIva}
-                className={`relative w-14 h-7 rounded-full transition-colors ${incluirIva ? 'bg-cyan-500' : 'bg-zinc-700'}`}
-                aria-label={incluirIva ? 'Quitar IVA' : 'Incluir IVA'}
-              >
-                <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full transition-transform ${incluirIva ? 'translate-x-7' : 'translate-x-0'}`} />
-              </button>
-              <span className={`text-sm ${incluirIva ? 'text-cyan-400 font-bold' : 'text-zinc-500'}`}>
-                Con IVA
-              </span>
-            </div>
-          </div>
-          <div className="w-full md:w-80 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-3 print:bg-white print:border-gray-300 print:text-black print:rounded-none">
-            <div className="flex justify-between text-zinc-400 print:text-gray-600">
-              <span>Subtotal</span>
-              <span>${calculatedValues.subtotal.toLocaleString()}</span>
-            </div>
-            {incluirIva && (
-              <div className="flex justify-between text-zinc-400 print:text-gray-600">
-                <span>IVA (19%)</span>
-                <span>${calculatedValues.montoIva.toLocaleString()}</span>
-              </div>
-            )}
-            <div className="border-t border-zinc-700 pt-3 flex justify-between text-xl font-bold print:border-gray-300 print:text-black">
-              <span>Total</span>
-              <span className="bg-gradient-to-r from-cyan-400 to-purple-500 bg-clip-text text-transparent print:text-black print:bg-none">
-                ${calculatedValues.formattedTotal}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 gap-4 print:hidden">
-          <button
-            onClick={enviarWhatsApp}
-            disabled={isSaving}
-            className={`flex items-center justify-center gap-2 font-bold py-4 rounded-xl transition-all shadow-lg ${
-              isSaving 
-                ? 'bg-zinc-700 text-zinc-400 cursor-wait' 
-                : 'bg-green-600 hover:bg-green-500 text-white shadow-green-500/20 cursor-pointer'
-            }`}
-          >
-            {isSaving ? (
-              <>
-                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Guardando y preparando...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                </svg>
-                Enviar por WhatsApp
-              </>
-            )}
-          </button>
-          <button
-            onClick={generarPDF}
-            disabled={isSaving}
-            className={`flex items-center justify-center gap-2 font-bold py-4 rounded-xl border transition-colors ${
-              isSaving 
-                ? 'bg-zinc-700 text-zinc-400 cursor-wait border-zinc-600' 
-                : 'bg-zinc-800 hover:bg-zinc-700 text-white border-zinc-700 cursor-pointer'
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-            </svg>
-            PDF / Imprimir
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
