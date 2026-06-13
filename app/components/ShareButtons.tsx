@@ -15,6 +15,16 @@ export default function ShareButtons({ nombre, precio, descripcion, imagen_url }
   const url = typeof window !== "undefined" ? window.location.href : "";
   const texto = `Mira este producto en Akatoyo: ${nombre} por $${precio.toLocaleString()}. ${descripcion}`;
 
+  // Add image validation
+  const isValidImage = (url: string) => {
+    try {
+      new URL(url);
+      return url.startsWith('http') || url.startsWith('/');
+    } catch {
+      return false;
+    }
+  };
+
   // Update Open Graph tags when props change
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -23,7 +33,7 @@ export default function ShareButtons({ nombre, precio, descripcion, imagen_url }
       const metaTags = [
         { property: "og:title", content: nombre },
         { property: "og:description", content: descripcion },
-        { property: "og:image", content: imagen_url },
+        { property: "og:image", content: isValidImage(imagen_url) ? imagen_url : "/images/fallback-product.jpg" },
         { property: "og:url", content: url },
         { property: "og:type", content: "product" },
         { property: "product:price:amount", content: precio.toString() },
@@ -99,7 +109,7 @@ export default function ShareButtons({ nombre, precio, descripcion, imagen_url }
       <Head>
         <meta property="og:title" content={nombre} />
         <meta property="og:description" content={descripcion} />
-        <meta property="og:image" content={imagen_url} />
+        <meta property="og:image" content={isValidImage(imagen_url) ? imagen_url : "/images/fallback-product.jpg"} />
         <meta property="og:url" content={url} />
         <meta property="og:type" content="product" />
         <meta property="product:price:amount" content={precio.toString()} />
