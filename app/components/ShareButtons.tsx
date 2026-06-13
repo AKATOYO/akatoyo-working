@@ -4,33 +4,42 @@ import { useState, useEffect } from "react";
 import Head from "next/head";
 import { toast } from "react-hot-toast";
 
-export default function ShareButtons({ nombre, precio, descripcion, imagen_url }: { 
-  nombre: string, 
-  precio: number, 
-  descripcion: string,
-  imagen_url: string 
-}) {
-  const [copiado, setCopiado] = useState(false);
+// 1. Interfaz para las propiedades del componente
+interface ShareButtonsProps {
+  nombre: string;
+  precio: number;
+  descripcion: string;
+  imagen_url: string;
+}
 
-  const url = typeof window !== "undefined" ? window.location.href : "";
-  const texto = `Mira este producto en Akatoyo: ${nombre} por $${precio.toLocaleString()}. ${descripcion}`;
+// 2. Interfaz para la estructura de etiquetas Meta dinámicas
+interface MetaTagConfig {
+  property: string;
+  content: string;
+}
 
-  // Add image validation
-  const isValidImage = (url: string) => {
+export default function ShareButtons({ nombre, precio, descripcion, imagen_url }: ShareButtonsProps) {
+  const [copiado, setCopiado] = useState<boolean>(false);
+
+  const url: string = typeof window !== "undefined" ? window.location.href : "";
+  const texto: string = `Mira este producto en Akatoyo: ${nombre} por $${precio.toLocaleString()}. ${descripcion}`;
+
+  // Validación de la estructura de la URL de la imagen
+  const isValidImage = (urlStr: string): boolean => {
     try {
-      new URL(url);
-      return url.startsWith('http') || url.startsWith('/');
+      new URL(urlStr);
+      return urlStr.startsWith('http') || urlStr.startsWith('/');
     } catch {
       return false;
     }
   };
 
-  // Update Open Graph tags when props change
+  // Actualización dinámica de etiquetas Open Graph en el DOM
   useEffect(() => {
     if (typeof window === "undefined") return;
     
-    const updateMetaTags = () => {
-      const metaTags = [
+    const updateMetaTags = (): void => {
+      const metaTags: MetaTagConfig[] = [
         { property: "og:title", content: nombre },
         { property: "og:description", content: descripcion },
         { property: "og:image", content: isValidImage(imagen_url) ? imagen_url : "/images/fallback-product.jpg" },
@@ -55,27 +64,40 @@ export default function ShareButtons({ nombre, precio, descripcion, imagen_url }
     updateMetaTags();
   }, [nombre, precio, descripcion, imagen_url, url]);
 
-  const compartirWhatsApp = () => {
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(texto + " \nVer más: " + url)}`;
+  // Manejadores de eventos de las redes sociales
+  const compartirWhatsApp = (): void => {
+    const whatsappUrl: string = `https://wa.me/?text=${encodeURIComponent(texto + " \nVer más: " + url)}`;
     window.open(whatsappUrl, "_blank");
   };
 
-  const compartirFacebook = () => {
-    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+  const compartirFacebook = (): void => {
+    const facebookUrl: string = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
     window.open(facebookUrl, "_blank");
   };
 
-  const compartirTwitter = () => {
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(texto)}&url=${encodeURIComponent(url)}`;
+  const compartirTwitter = (): void => {
+    const twitterUrl: string = `https://twitter.com/intent/tweet?text=${encodeURIComponent(texto)}&url=${encodeURIComponent(url)}`;
     window.open(twitterUrl, "_blank");
   };
 
-  const compartirLinkedIn = () => {
-    const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`;
+  const compartirLinkedIn = (): void => {
+    const linkedInUrl: string = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`;
     window.open(linkedInUrl, "_blank");
   };
 
-  const compartirNativo = async () => {
+  const copiarEnlace = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiado(true);
+      toast.success("¡Enlace copiado al portapapeles!");
+      setTimeout(() => setCopiado(false), 2000);
+    } catch (error) {
+      console.error('Error copying link:', error);
+      toast.error("Error al copiar el enlace");
+    }
+  };
+
+  const compartirNativo = async (): Promise<void> => {
     if (navigator.share) {
       try {
         await navigator.share({
@@ -87,20 +109,7 @@ export default function ShareButtons({ nombre, precio, descripcion, imagen_url }
         console.error('Error sharing:', error);
       }
     } else {
-      // Fallback to copying the link
-      copiarEnlace();
-    }
-  };
-
-  const copiarEnlace = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiado(true);
-      toast.success("¡Enlace copiado al portapapeles!");
-      setTimeout(() => setCopiado(false), 2000);
-    } catch (error) {
-      console.error('Error copying link:', error);
-      toast.error("Error al copiar el enlace");
+      await copiarEnlace();
     }
   };
 
@@ -166,25 +175,13 @@ export default function ShareButtons({ nombre, precio, descripcion, imagen_url }
 
         <button 
           onClick={compartirNativo}
-          className="text-zinc-400 hover:text-white transition-colors"
-          title="Compartir"
-          aria-label="Compartir"
+          className={`transition-colors ${copiado ? 'text-green-500' : 'text-zinc-400 hover:text-white'}`}
+          title={copiado ? "¡Enlace copiado!" : "Compartir o copiar enlace"}
+          aria-label="Compartir o copiar enlace"
         >
-          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/>
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.684 10.748a3.001 3.001 0 110 2.504l6.754 3.939a3.001 3.001 0 11-.48 1.621l-6.757-3.94a3.001 3.001 0 110-5.748l6.757-3.94a3.001 3.001 0 11.48 1.62l-6.754 3.94z" />
           </svg>
-        </button>
-
-        <button 
-          onClick={copiarEnlace}
-          className="text-zinc-400 hover:text-white transition-colors text-sm font-medium flex items-center gap-1 ml-auto"
-          title={copiado ? "¡Copiado!" : "Copiar enlace"}
-          aria-label={copiado ? "Enlace copiado" : "Copiar enlace"}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
-          </svg>
-          {copiado ? "¡Copiado!" : "Copiar"}
         </button>
       </div>
     </>
