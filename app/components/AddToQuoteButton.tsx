@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -5,32 +6,18 @@ import { motion } from "framer-motion";
 import { useCotizacionStore } from "../store/cotizacionStore";
 import { toast } from "react-hot-toast";
 
-// 1. Definición de la interfaz del producto
 interface Product {
   id: string | number;
   nombre: string;
   precio: number;
 }
 
-// 2. Definición de las propiedades del componente
-interface AddToQuoteButtonProps {
-  producto: Product;
-}
+export default function AddToQuoteButton({ producto }: { producto: Product }) {
+  const agregarProducto = useCotizacionStore((state) => state.agregarProducto);
+  const [isAdded, setIsAdded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-// 3. Tipado del estado de Zustand (Asegúrate de que coincida con tu store)
-interface CotizacionState {
-  agregarProducto: (producto: Product) => Promise<void> | void;
-}
-
-export default function AddToQuoteButton({ producto }: AddToQuoteButtonProps) {
-  // Se añade el tipado explícito al hook del store
-  const agregarProducto = useCotizacionStore(
-    (state: CotizacionState) => state.agregarProducto
-  );
-  
-  const [isAdded, setIsAdded] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-
+  // Cleanup timeout on component unmount
   useEffect(() => {
     if (isAdded) {
       const timer = setTimeout(() => setIsAdded(false), 2000);
@@ -38,7 +25,7 @@ export default function AddToQuoteButton({ producto }: AddToQuoteButtonProps) {
     }
   }, [isAdded]);
 
-  const handleAdd = async (): Promise<void> => {
+  const handleAdd = async () => {
     if (isAdded || isLoading) return;
     
     setIsLoading(true);
