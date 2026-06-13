@@ -33,6 +33,8 @@ export async function generateImageMetadata({ params }: { params: Promise<{ id: 
   }
 }
 
+export const runtime = 'edge';
+
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -42,6 +44,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
       throw error || new Error('Product not found');
     }
 
+    // Fetch font
     const fontData = await fetch(new URL('/Geist-Regular.ttf', import.meta.url)).then(res => res.arrayBuffer())
 
     return new ImageResponse(
