@@ -45,7 +45,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
         description: product.description,
         images: [
           {
-            url: product.images[0] || '/placeholder-product.png',
+            url: product.images[0] || '/images/fallback-product.jpg',
             width: 800,
             height: 600,
             alt: product.name,
@@ -58,7 +58,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
         card: 'summary_large_image',
         title: product.name,
         description: product.description,
-        images: [product.images[0] || '/placeholder-product.png'],
+        images: [product.images[0] || '/images/fallback-product.jpg'],
       },
     };
   } catch (error) {
@@ -109,7 +109,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 nombre={product.name}
                 precio={product.price}
                 descripcion={product.description}
-                imagen_url={product.images[0] || '/placeholder-product.png'}
+                imagen_url={product.images[0] || '/images/fallback-product.jpg'}
               />
             </div>
           </div>
@@ -123,7 +123,7 @@ export default async function ProductPage({ params }: ProductPageProps) {
                   <div key={relatedProduct.id} className="bg-zinc-900 rounded-xl overflow-hidden">
                     <div className="aspect-square bg-zinc-800">
                       <Image
-                        src={relatedProduct.images[0] || '/placeholder-product.png'}
+                        src={relatedProduct.images[0] || '/images/fallback-product.jpg'}
                         alt={relatedProduct.name}
                         fill
                         className="object-cover"
