@@ -1,0 +1,13 @@
+git clone https://github.com/akatoyo/akatoyo-working.git (descargar  con git)
+
+npm run build (compilar)
+
+git add .
+
+
+git push origin main
+
+
+git push -f origin main
+
+
