@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       description: `Productos de ${nombre} en Akatoyo.`,
       images: [
         {
-          url: '/og-category-image.jpg',
+          url: '/images/og-category-image.jpg',
           width: 1200,
           height: 630,
           alt: `Categoría: ${nombre}`,
@@ -78,7 +78,7 @@ export default async function CategoriaPage({ params }: Props) {
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                       loading="lazy"
                       onError={(e) => {
-                        e.currentTarget.src = "/path/to/fallback-image.jpg";
+                        e.currentTarget.src = "/images/fallback-product.jpg";
                       }}
                     />
                   </div>
