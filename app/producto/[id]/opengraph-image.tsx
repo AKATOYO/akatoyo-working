@@ -1,43 +1,16 @@
 import { ImageResponse } from 'next/og'
 import { supabase } from '@/lib/supabase'
 
-// 1. Interfaz para el tipado de los parámetros de la URL
-interface ProductParams {
-  id: string;
-}
-
-// 2. Interfaz estricta para el registro de la tabla "productos" de Supabase
-interface ProductoSupabase {
-  id: string | number;
-  nombre: string;
-  precio: number;
-  descripcion: string;
-  imagen_url?: string;
-  categoria?: string;
-}
-
-// 3. Tipado de metadatos de Next.js
-interface OgImageMetadata {
-  alt: string;
-  width: number;
-  height: number;
-}
-
-export const alt: string = 'Akatoyo Product'
+export const alt = 'Akatoyo Product'
 export const size = {
   width: 1200,
   height: 630,
 }
 
-export async function generateImageMetadata({ params }: { params: Promise<ProductParams> }): Promise<OgImageMetadata[]> {
+export async function generateImageMetadata({ params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    // Forzamos el tipado genérico en la consulta de Supabase
-    const { data: p, error } = await supabase
-      .from("productos")
-      .select("*")
-      .eq("id", id)
-      .single<ProductoSupabase>();
+    const { data: p, error } = await supabase.from("productos").select("*").eq("id", id).single();
     
     if (error) throw error;
     
@@ -48,7 +21,7 @@ export async function generateImageMetadata({ params }: { params: Promise<Produc
         height: 630,
       },
     ]
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Error fetching product for OG image:', error);
     return [
       {
@@ -60,28 +33,19 @@ export async function generateImageMetadata({ params }: { params: Promise<Produc
   }
 }
 
-export const runtime: 'edge' = 'edge';
+export const runtime = 'edge';
 
-export default async function Image({ params }: { params: Promise<ProductParams> }): Promise<ImageResponse> {
+export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const { data: producto, error } = await supabase
-      .from("productos")
-      .select("*")
-      .eq("id", id)
-      .single<ProductoSupabase>();
+    const { data: producto, error } = await supabase.from("productos").select("*").eq("id", id).single();
 
     if (error || !producto) {
       throw error || new Error('Product not found');
     }
 
-    // Carga de tipografía con buffer tipado de forma estricta
-    let fontData: ArrayBuffer | undefined;
-    try {
-      fontData = await fetch(new URL('/Geist-Regular.ttf', import.meta.url)).then(res => res.arrayBuffer());
-    } catch (fontError: unknown) {
-      console.warn('Failed to load custom font, using system font', fontError);
-    }
+    // Fetch font
+    const fontData = await fetch(new URL('/Geist-Regular.ttf', import.meta.url)).then(res => res.arrayBuffer())
 
     return new ImageResponse(
       (
@@ -96,20 +60,19 @@ export default async function Image({ params }: { params: Promise<ProductParams>
       ),
       {
         ...size,
-        fonts: fontData ? [
+        fonts: [
           {
             name: 'Geist',
             data: fontData,
             style: 'normal',
             weight: 400,
           },
-        ] : undefined,
+        ],
       }
     )
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Error generating OG image:', error);
     
-    // Imagen de respaldo (Fallback) en caso de error crítico
     return new ImageResponse(
       (
         <div tw="flex flex-col w-full h-full bg-zinc-950 text-white p-12">
