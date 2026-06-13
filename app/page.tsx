@@ -7,7 +7,10 @@ export const metadata: Metadata = { title: "Inicio", description: "Catálogo ofi
 export default async function Home({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const { q } = await searchParams;
   const { data: productos } = await supabase.from("productos").select("*");
-  const productosFiltrados = q ? productos?.filter(p => p.nombre.toLowerCase().includes(q.toLowerCase()) || p.descripcion.toLowerCase().includes(q.toLowerCase())) : productos;
+  const productosFiltrados = q ? productos?.filter(p => 
+    p.nombre.toLowerCase().includes(q.toLowerCase()) || 
+    p.descripcion.toLowerCase().includes(q.toLowerCase())
+  ) : productos;
 
   return (
     <div className="relative min-h-screen bg-zinc-950 text-white overflow-hidden pt-8">
