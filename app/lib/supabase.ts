@@ -1,35 +1,124 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl: string = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey: string = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// 1. Cliente único de Supabase con tipado explícito
-export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey)
+// Create a single supabase client for interacting with your database
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// 2. Wrapper para el manejo seguro de errores con tipado estricto
-export const safeSupabaseCall = async <T>(operation: () => Promise<T>): Promise<T> => {
+// Error handling wrapper
+export const safeSupabaseCall = async <T,>(operation: () => Promise<T>): Promise<T> => {
   try {
     return await operation();
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Supabase error:', error);
     throw error;
   }
 };
 
-// 3. Control de Rate Limiting con cola asíncrona segura
-let lastCallTime: number = 0;
-const RATE_LIMIT_DELAY: number = 100; // ms de espera mínima entre llamadas
+// Rate limiting
+let lastCallTime = 0;
+const RATE_LIMIT_DELAY = 100; // ms between calls
 
-export const rateLimitedSupabaseCall = async <T>(operation: () => Promise<T>): Promise<T> => {
-  const now: number = Date.now();
-  const timePassed: number = now - lastCallTime;
-
-  if (timePassed < RATE_LIMIT_DELAY) {
-    const delayTime: number = RATE_LIMIT_DELAY - timePassed;
-    await new Promise<void>((resolve) => setTimeout(resolve, delayTime));
+export const rateLimitedSupabaseCall = async <T,>(operation: () => Promise<T>): Promise<T> => {
+  const now = Date.now();
+  if (now - lastCallTime < RATE_LIMIT_DELAY) {
+    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY - (now - lastCallTime)));
   }
-  
-  // Registramos el tiempo justo antes de ejecutar la operación
   lastCallTime = Date.now();
   return operation();
 };
+
+-------------------------------------------------------------------------------------------------------------------
+
+---------------------------app/producto/[id]/opengraph-image.tsx-----------------------------------------------------
+import { ImageResponse } from 'next/og'
+import { supabase } from '@/lib/supabase'
+
+export const alt = 'Akatoyo Product'
+export const size = {
+  width: 1200,
+  height: 630,
+}
+
+export async function generateImageMetadata({ params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const { data: p, error } = await supabase.from("productos").select("*").eq("id", id).single();
+    
+    if (error) throw error;
+    
+    return [
+      {
+        alt: p?.nombre || 'Akatoyo Product',
+        width: 1200,
+        height: 630,
+      },
+    ]
+  } catch (error) {
+    console.error('Error fetching product for OG image:', error);
+    return [
+      {
+        alt: 'Akatoyo Product',
+        width: 1200,
+        height: 630,
+      },
+    ]
+  }
+}
+
+export const runtime = 'edge';
+
+export default async function Image({ params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const { data: producto, error } = await supabase.from("productos").select("*").eq("id", id).single();
+
+    if (error || !producto) {
+      throw error || new Error('Product not found');
+    }
+
+    // Fetch font
+    const fontData = await fetch(new URL('/Geist-Regular.ttf', import.meta.url)).then(res => res.arrayBuffer())
+
+    return new ImageResponse(
+      (
+        <div tw="flex flex-col w-full h-full bg-zinc-950 text-white p-12">
+          <div tw="flex flex-col items-center justify-center w-full h-full">
+            <div tw="text-6xl font-bold mb-4">{producto.nombre}</div>
+            <div tw="text-3xl text-cyan-400 mb-2">${Number(producto.precio).toLocaleString()}</div>
+            <div tw="text-xl text-zinc-400 text-center max-w-lg">{producto.descripcion}</div>
+            <div tw="absolute bottom-8 text-sm text-zinc-500">Akatoyo | Tienda Oficial</div>
+          </div>
+        </div>
+      ),
+      {
+        ...size,
+        fonts: [
+          {
+            name: 'Geist',
+            data: fontData,
+            style: 'normal',
+            weight: 400,
+          },
+        ],
+      }
+    )
+  } catch (error) {
+    console.error('Error generating OG image:', error);
+    
+    return new ImageResponse(
+      (
+        <div tw="flex flex-col w-full h-full bg-zinc-950 text-white p-12">
+          <div tw="flex flex-col items-center justify-center w-full h-full">
+            <div tw="text-6xl font-bold mb-4">Producto no encontrado</div>
+            <div tw="text-sm text-zinc-500">Akatoyo | Tienda Oficial</div>
+          </div>
+        </div>
+      ),
+      {
+        ...size,
+      }
+    )
+  }
+}
