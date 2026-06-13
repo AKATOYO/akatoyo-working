@@ -1,30 +1,35 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+const supabaseUrl: string = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey: string = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Create a single supabase client for interacting with your database
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// 1. Cliente único de Supabase con tipado explícito
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey)
 
-// Error handling wrapper
-export const safeSupabaseCall = async <T,>(operation: () => Promise<T>): Promise<T> => {
+// 2. Wrapper para el manejo seguro de errores con tipado estricto
+export const safeSupabaseCall = async <T>(operation: () => Promise<T>): Promise<T> => {
   try {
     return await operation();
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Supabase error:', error);
     throw error;
   }
 };
 
-// Rate limiting
-let lastCallTime = 0;
-const RATE_LIMIT_DELAY = 100; // ms between calls
+// 3. Control de Rate Limiting con cola asíncrona segura
+let lastCallTime: number = 0;
+const RATE_LIMIT_DELAY: number = 100; // ms de espera mínima entre llamadas
 
-export const rateLimitedSupabaseCall = async <T,>(operation: () => Promise<T>): Promise<T> => {
-  const now = Date.now();
-  if (now - lastCallTime < RATE_LIMIT_DELAY) {
-    await new Promise(resolve => setTimeout(resolve, RATE_LIMIT_DELAY - (now - lastCallTime)));
+export const rateLimitedSupabaseCall = async <T>(operation: () => Promise<T>): Promise<T> => {
+  const now: number = Date.now();
+  const timePassed: number = now - lastCallTime;
+
+  if (timePassed < RATE_LIMIT_DELAY) {
+    const delayTime: number = RATE_LIMIT_DELAY - timePassed;
+    await new Promise<void>((resolve) => setTimeout(resolve, delayTime));
   }
+  
+  // Registramos el tiempo justo antes de ejecutar la operación
   lastCallTime = Date.now();
   return operation();
 };
