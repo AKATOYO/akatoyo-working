@@ -1,23 +1,34 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
-import { getProductById, getRelatedProducts } from '@/lib/product-api';
-import { AddToCartButton } from '@/components/add-to-cart-button';
+import { getProductById, getRelatedProducts, getAllProducts } from '@/lib/product-api';
 import { ProductImages } from '@/components/product-images';
 import { ProductInfo } from '@/components/product-info';
 import { ShareButtons } from '@/components/share-buttons';
 import { Metadata } from 'next';
 
-interface ProductPageProps {
-  params: {
-    id: string;
-  };
+// 1. Interfaces estrictas para el tipado de la API de productos
+export interface Product {
+  id: string | number;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  images: string[];
 }
 
-// Generate metadata for Open Graph
-export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
-  const productId = params.id;
+// 2. Tipado obligatorio de Next.js 15+ (params ahora es una Promesa)
+interface ProductPageProps {
+  params: Promise<{
+    id: string;
+  }>;
+}
 
-  // Validate product ID
+// Generación de metadatos dinámicos para Open Graph
+export async function generateMetadata({ params }: ProductPageProps): Promise<Metadata> {
+  // En Next.js 15+ se debe usar await para obtener los parámetros de la URL
+  const { id: productId } = await params;
+
+  // Validación básica del ID de producto
   if (!productId || isNaN(Number(productId))) {
     return {
       title: 'Product Not Found',
@@ -26,8 +37,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   }
 
   try {
-    // Fetch product data
-    const product = await getProductById(productId);
+    const product: Product | null = await getProductById(productId);
     
     if (!product) {
       return {
@@ -36,7 +46,6 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
       };
     }
 
-    // Open Graph metadata
     return {
       title: product.name,
       description: product.description,
@@ -61,7 +70,7 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
         images: [product.images[0] || '/images/fallback-product.jpg'],
       },
     };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching product for metadata:', error);
     return {
       title: 'Product Not Found',
@@ -70,41 +79,40 @@ export async function generateMetadata({ params }: ProductPageProps): Promise<Me
   }
 }
 
+// Componente principal de la página (Server Component)
 export default async function ProductPage({ params }: ProductPageProps) {
-  const productId = params.id;
+  // Resolución asíncrona de los parámetros para Next.js 15+
+  const { id: productId } = await params;
 
-  // Validate product ID
+  // Validación del ID de producto
   if (!productId || isNaN(Number(productId))) {
     notFound();
   }
 
   try {
-    // Fetch product data
-    const product = await getProductById(productId);
+    const product: Product | null = await getProductById(productId);
     if (!product) {
       notFound();
     }
 
-    // Fetch related products
-    const relatedProducts = await getRelatedProducts(product.category, productId);
+    // Consulta de productos relacionados basados en la categoría del producto actual
+    const relatedProducts: Product[] = await getRelatedProducts(product.category, productId);
 
     return (
       <div className="min-h-screen bg-zinc-950 text-white py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-            {/* Product Images */}
+            {/* Imágenes del Producto */}
             <div className="space-y-4">
               <ProductImages images={product.images} name={product.name} />
             </div>
 
-            {/* Product Info */}
+            {/* Información y Acciones */}
             <div className="space-y-6">
-              <ProductInfo 
-                product={product} 
-                onAddToCart={() => {}} 
-              />
+              {/* Nota: quitamos onAddToCart si ProductInfo ya maneja internamente AddToCartButton */}
+              <ProductInfo product={product} />
               
-              {/* Share Buttons */}
+              {/* Botones para compartir */}
               <ShareButtons 
                 nombre={product.name}
                 precio={product.price}
@@ -114,14 +122,15 @@ export default async function ProductPage({ params }: ProductPageProps) {
             </div>
           </div>
 
-          {/* Related Products */}
+          {/* Productos Relacionados */}
           {relatedProducts.length > 0 && (
             <div className="mt-16">
               <h2 className="text-2xl font-bold mb-8">Productos relacionados</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
                 {relatedProducts.map((relatedProduct) => (
                   <div key={relatedProduct.id} className="bg-zinc-900 rounded-xl overflow-hidden">
-                    <div className="aspect-square bg-zinc-800">
+                    {/* Contenedor relativo requerido por el componente Image de Next.js al usar 'fill' */}
+                    <div className="aspect-square bg-zinc-800 relative">
                       <Image
                         src={relatedProduct.images[0] || '/images/fallback-product.jpg'}
                         alt={relatedProduct.name}
@@ -144,20 +153,20 @@ export default async function ProductPage({ params }: ProductPageProps) {
         </div>
       </div>
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching product:', error);
     notFound();
   }
 }
 
-// Generate static params for all products
-export async function generateStaticParams() {
+// Generación de rutas estáticas (Static Site Generation - SSG)
+export async function generateStaticParams(): Promise<{ id: string }[]> {
   try {
-    const products = await getAllProducts(); // Assuming you have this function
+    const products: Product[] = await getAllProducts();
     return products.map((product) => ({
       id: product.id.toString(),
     }));
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating static params:', error);
     return [];
   }
